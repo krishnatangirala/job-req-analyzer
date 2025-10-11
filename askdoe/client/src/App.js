@@ -50,19 +50,192 @@ function App() {
     
     try {
       // Replace with your actual Node.js endpoint URL
-      const res = await fetch('http://localhost:5000/processResume', {
+      const res = await fetch('http://localhost:5000/analyze-resume', {
         method: 'POST',
         body: formData,
       });
       
       const data = await res.json();
-      setResponse(data.response || data.analysis || JSON.stringify(data, null, 2));
+      // Store the raw response from the API
+      setResponse(data.response || data.analysis || data.message || JSON.stringify(data, null, 2));
     } catch (error) {
       setResponse('Error: Unable to analyze resume. Please try again.');
       console.error('Error:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  // Function to format inline markdown (bold, italic)
+  const formatInlineMarkdown = (text) => {
+    if (!text) return text;
+    
+    // Replace **bold** with <strong>
+    text = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    
+    // Replace *italic* with <em>
+    text = text.replace(/\*(.*?)\*/g, '<em>$1</em>');
+    
+    // Replace em dashes
+    text = text.replace(/–/g, '—');
+    text = text.replace(/‑/g, '-');
+    
+    return text;
+  };
+
+  // Function to format the markdown-style response
+  const formatResponse = (text) => {
+    if (!text) return null;
+
+    // Split by lines and process
+    const lines = text.split('\n');
+    const elements = [];
+    let currentSection = [];
+    let inTable = false;
+    let tableRows = [];
+    let inList = false;
+    let listItems = [];
+
+    const flushSection = (index) => {
+      if (currentSection.length > 0) {
+        const content = formatInlineMarkdown(currentSection.join(' '));
+        elements.push(<p key={`p-${index}`} dangerouslySetInnerHTML={{ __html: content }} />);
+        currentSection = [];
+      }
+    };
+
+    const flushList = (index) => {
+      if (listItems.length > 0) {
+        elements.push(<ul key={`ul-${index}`} className="formatted-list">{listItems}</ul>);
+        listItems = [];
+        inList = false;
+      }
+    };
+
+    lines.forEach((line, index) => {
+      // Blockquote (starts with >)
+      if (line.trim().startsWith('>')) {
+        flushSection(index);
+        flushList(index);
+        const content = formatInlineMarkdown(line.replace(/^>\s*/, '').trim());
+        elements.push(<blockquote key={`bq-${index}`} className="tip-blockquote" dangerouslySetInnerHTML={{ __html: content }} />);
+      }
+      // Headers (##, ###)
+      else if (line.startsWith('###')) {
+        flushSection(index);
+        flushList(index);
+        elements.push(<h3 key={`h3-${index}`} className="section-subheading">{line.replace(/###/g, '').trim()}</h3>);
+      } else if (line.startsWith('##')) {
+        flushSection(index);
+        flushList(index);
+        elements.push(<h2 key={`h2-${index}`} className="section-heading">{line.replace(/##/g, '').trim()}</h2>);
+      }
+      // Table detection
+      else if (line.includes('|') && line.trim().startsWith('|')) {
+        flushSection(index);
+        flushList(index);
+        if (!inTable) {
+          inTable = true;
+          tableRows = [];
+        }
+        tableRows.push(line);
+      } else if (inTable && !line.includes('|')) {
+        // End of table
+        inTable = false;
+        elements.push(renderTable(tableRows, index));
+        tableRows = [];
+        if (line.trim()) {
+          currentSection.push(line);
+        }
+      }
+      // Bullet points
+      else if (line.trim().startsWith('-') || line.trim().startsWith('•')) {
+        flushSection(index);
+        if (!inList) {
+          inList = true;
+        }
+        const content = formatInlineMarkdown(line.replace(/^[-•]\s*/, '').trim());
+        listItems.push(<li key={`li-${index}`} className="bullet-item" dangerouslySetInnerHTML={{ __html: content }} />);
+      }
+      // Numbered lists
+      else if (/^\d+\./.test(line.trim())) {
+        flushSection(index);
+        flushList(index);
+        const content = formatInlineMarkdown(line.replace(/^\d+\.\s*/, '').trim());
+        elements.push(<li key={`li-${index}`} className="numbered-item" dangerouslySetInnerHTML={{ __html: content }} />);
+      }
+      // Horizontal rule
+      else if (line.trim() === '---') {
+        flushSection(index);
+        flushList(index);
+        elements.push(<hr key={`hr-${index}`} className="section-divider" />);
+      }
+      // Regular text
+      else if (line.trim()) {
+        if (inList) {
+          flushList(index);
+        }
+        currentSection.push(line);
+      } else {
+        flushSection(index);
+        flushList(index);
+      }
+    });
+
+    // Handle any remaining table
+    if (inTable && tableRows.length > 0) {
+      elements.push(renderTable(tableRows, 'final'));
+    }
+
+    // Handle any remaining list
+    if (listItems.length > 0) {
+      elements.push(<ul key="ul-final" className="formatted-list">{listItems}</ul>);
+    }
+
+    // Handle any remaining section
+    if (currentSection.length > 0) {
+      const content = formatInlineMarkdown(currentSection.join(' '));
+      elements.push(<p key="p-final" dangerouslySetInnerHTML={{ __html: content }} />);
+    }
+
+    return elements;
+  };
+
+  // Helper function to render tables
+  const renderTable = (rows, key) => {
+    if (rows.length < 2) return null;
+
+    const parseRow = (row) => {
+      return row.split('|')
+        .map(cell => cell.trim())
+        .filter(cell => cell.length > 0);
+    };
+
+    const headers = parseRow(rows[0]);
+    const dataRows = rows.slice(2).map(parseRow); // Skip separator row
+
+    return (
+      <div key={`table-${key}`} className="table-container">
+        <table className="response-table">
+          <thead>
+            <tr>
+              {headers.map((header, i) => (
+                <th key={i}>{header}</th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {dataRows.map((row, i) => (
+              <tr key={i}>
+                {row.map((cell, j) => (
+                  <td key={j} dangerouslySetInnerHTML={{ __html: cell.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>').replace(/<br>/g, '<br/>') }}></td>
+                ))}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
   };
 
   return (
@@ -100,7 +273,7 @@ function App() {
                 </svg>
                 <h2>Analysis Complete</h2>
               </div>
-              <div className="response-text">{response}</div>
+              <div className="response-text">{formatResponse(response)}</div>
             </div>
           ) : (
             <div className="empty-state">
