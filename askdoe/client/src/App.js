@@ -10,6 +10,7 @@ function App() {
   useEffect(() => {
     // Create script element for Digital Ocean chatbot
     const script = document.createElement('script');
+
     script.src = 'https://nwdtgi4rhjpdnf4ehjt5ua4d.agents.do-ai.run/static/chatbot/widget.js';
     script.async = true;
     script.setAttribute('data-agent-id', '9c53e226-a676-11f0-b074-4e013e2ddde4');
@@ -21,8 +22,19 @@ function App() {
     script.setAttribute('data-starting-message', 'Hello there! I am Doe, your AI-powered Agent who can help with your job search in 2025. How can I help you?');
     script.setAttribute('data-logo', '/static/chatbot/icons/default-agent.svg');
     
+    // Add load and error handlers
+    script.onload = () => {
+      console.log('✅ Chatbot widget loaded successfully');
+    };
+    
+    script.onerror = (error) => {
+      console.error('❌ Failed to load chatbot widget:', error);
+    };
+    
+    // Append script to document body
     document.body.appendChild(script);
     
+    // Cleanup function to remove script when component unmounts
     return () => {
       if (document.body.contains(script)) {
         document.body.removeChild(script);
