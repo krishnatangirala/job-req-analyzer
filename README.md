@@ -11,3 +11,8 @@ The landing page displays two functionalities.
 
 1. Resume analysis (based on the resume you upload)
 2. Chat bot (on the bottom right) to answer your questions on job search and the job market. 
+
+Some of the screenshots of the app:
+
+<img width="1528" height="880" alt="Screenshot 2025-10-12 150819" src="https://github.com/user-attachments/assets/11fe12ae-8897-4ffe-bdbd-eb0d6a76b185" />
+<img width="1544" height="891" alt="Screenshot 2025-10-12 150748" src="https://github.com/user-attachments/assets/0a676cd4-41d5-4a19-a29f-95d2ec875f2c" />
